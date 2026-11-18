@@ -54,7 +54,7 @@ jobs:
               -F "imagem=@$img;type=image/jpeg" \
               --form-string "legenda=$legenda") || codigo="000"
             cat resposta.json || true; echo
-            echo "URL final: $(curl -sS -o /dev/null -L -w '%{url_effective}' --max-time 20 \"$SITE_URL/\" || true)"
+            echo "URL final: $(curl -sS -o /dev/null -L -w '%{url_effective}' --max-time 20 "$SITE_URL/" || true)"
 
             if [ "$codigo" = "200" ] && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' resposta.json; then
               mkdir -p criativos/publicados
