@@ -77,3 +77,69 @@ Secrets do repositório (Settings → Secrets and variables → Actions):
 - `INSTAGRAM_PUBLISH_SECRET` — o mesmo valor da variável de mesmo nome na Vercel
 
 O `vercel.json` faz a Vercel ignorar commits que só mexem em criativos/scripts/Action.
+
+---
+
+# Tela `/criativos` (gerar, aprovar e agendar pelo navegador)
+
+Caminho adicional ao fluxo do GitHub Action (que continua funcionando igual).
+Abra `https://SEU-DOMINIO.vercel.app/criativos`, entre com a chave (`INSTAGRAM_PUBLISH_SECRET`) e:
+
+1. **Gerar criativo do dia**: o Claude escreve o texto seguindo `criativos/PADRAO.md`
+   (alterna Serviço/Dica e não repete os últimos 10 temas). A arte 1080×1080 é desenhada no servidor.
+2. **Editar textos**: muda título, subtítulo, tópicos, CTA ou legenda e regenera só a imagem.
+   **Gerar outro** descarta o rascunho atual e cria um novo.
+3. **Pode postar**: agenda para o horário do dia da semana (fuso de São Paulo).
+   Se o horário de hoje já passou, ou o dia está desligado, ou já tem outro post agendado
+   nesse dia, vai para o próximo dia ativo livre. **Só publica nesse horário.**
+4. **Horários de postagem**: liga/desliga cada dia e define a hora.
+
+O post é publicado pela rota `GET /api/cron/publicar`, que o Supabase chama a cada 5 minutos.
+Se der erro, ela tenta de novo em 10 minutos (até 3 vezes); depois o item aparece em vermelho
+em **Publicados** com o botão **Tentar de novo**. A rota nunca publica o mesmo criativo duas vezes.
+
+## Configuração (uma vez)
+
+### 1. Banco (Supabase → SQL Editor)
+1. Rode `supabase/migrations/0001_criativos.sql` (cria `criativos` e `horarios_postagem`).
+2. Abra `supabase/migrations/0002_criativos_cron.sql`, **troque** `SEU-DOMINIO` pelo domínio de
+   produção do app na Vercel (o de **Settings → Domains**, não a URL de um deploy específico,
+   que é protegida pela Vercel Authentication) e `SEU_CRON_SECRET` pelo valor de `CRON_SECRET`, e rode.
+   - Ver se está rodando: `select * from cron.job_run_details order by start_time desc limit 5;`
+   - Trocar domínio ou segredo: `select cron.unschedule('armag-publicar-agendados');` e rode o arquivo de novo.
+
+### 2. Vercel → Settings → Environment Variables
+| Nome | Valor |
+|---|---|
+| `ANTHROPIC_API_KEY` | chave da API da Anthropic (console.anthropic.com → API Keys) |
+| `CRON_SECRET` | uma senha longa aleatória (a mesma do passo 1.2) |
+
+Nenhuma variável usa o prefixo `NEXT_PUBLIC_`: chaves e tokens ficam só no servidor.
+Depois de salvar, faça **Redeploy**.
+
+### Rotas
+Todas exigem o header `x-api-key: <INSTAGRAM_PUBLISH_SECRET>`, menos o cron (`Authorization: Bearer <CRON_SECRET>`).
+
+| Rota | O que faz |
+|---|---|
+| `POST /api/criativos/gerar` | gera texto + imagem como rascunho (`{ "descartar_id": "..." }` descarta o anterior) |
+| `PATCH /api/criativos/[id]` | edita os textos de um rascunho e regenera a imagem |
+| `POST /api/criativos/[id]/aprovar` | "Pode postar": agenda (também usado no "Tentar de novo") |
+| `POST /api/criativos/[id]/cancelar` | volta um agendado para rascunho (`{ "descartar": true }` → cancelado) |
+| `POST /api/criativos/[id]/publicar-agora` | publica na hora |
+| `GET /api/criativos?status=...` | lista |
+| `GET /api/criativos/render/[id]` | PNG da arte |
+| `GET/PUT /api/horarios` | horários por dia da semana |
+| `GET /api/cron/publicar` | publica os agendados vencidos |
+
+### Detalhes
+- Texto: modelo `claude-sonnet-5-5` com saída em JSON validada (título ≤ 40, subtítulo ≤ 110,
+  tópicos ≤ 35, legenda ≤ 2.200, 5 a 8 hashtags começando por `#armag`); até 2 novas tentativas.
+  Se o modelo recusar por política, a API usa o modelo reserva automaticamente (`fallbacks: "default"`).
+- Arte: `next/og` reproduzindo `criativos/template.html`. O Satori não lê `.woff2`, por isso
+  `criativos/marca/fonts/` tem também as versões `.woff` (Cinzel e Inter, licença OFL) e o
+  `brasao-transparente.png` (o brasão com fundo transparente, no lugar do `mix-blend-mode`).
+- Imagens: JPEG 90 em `instagram/criativos/AAAA-MM-DD/<id>.jpg`.
+- Testes: `npm test` (agendamento no fuso de SP, validação do texto, tamanho do título).
+- O `vercel.json` não faz deploy de commits que só mexem em `criativos/` ou `*.md`.
+  Se mudar o `PADRAO.md`, faça um **Redeploy** manual para a tela usar o texto novo.
