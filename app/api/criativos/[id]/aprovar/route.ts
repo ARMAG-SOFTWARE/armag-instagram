@@ -14,6 +14,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const c = await buscar(id);
     if (!c) return NextResponse.json({ erro: "Criativo não encontrado" }, { status: 404 });
     if (c.status !== "rascunho" && c.status !== "erro") return NextResponse.json({ erro: `Criativo está como ${c.status}` }, { status: 409 });
+    if (c.formato === "reel" && c.status === "erro" && !c.video_url) {
+      return NextResponse.json({ erro: "O vídeo deste Reel não foi montado. Use Editar textos para montar de novo." }, { status: 409 });
+    }
     return NextResponse.json({ ok: true, criativo: apresentar(await agendar(c)) });
   } catch (e) {
     return falha(e, "criativos/aprovar", 400);

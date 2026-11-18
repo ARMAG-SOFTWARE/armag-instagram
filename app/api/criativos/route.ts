@@ -4,7 +4,7 @@ import { apresentar, listar, type Status } from "@/lib/criativos/dados";
 import { autorizado, falha, naoAutorizado } from "@/lib/criativos/servidor";
 
 export const runtime = "nodejs";
-const VALIDOS: Status[] = ["rascunho", "agendado", "publicando", "publicado", "erro", "cancelado"];
+const VALIDOS: Status[] = ["rascunho", "renderizando", "agendado", "processando", "publicando", "publicado", "erro", "cancelado"];
 
 export async function GET(req: NextRequest) {
   if (!autorizado(req)) return naoAutorizado();

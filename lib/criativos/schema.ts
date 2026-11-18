@@ -35,3 +35,16 @@ export function validarTexto(dados: unknown): { ok: true; texto: TextoCriativo }
   if (r.success) return { ok: true, texto: r.data };
   return { ok: false, erros: r.error.issues.map((i) => (i.message.includes(":") ? i.message : `${i.path.join(".")}: ${i.message}`)) };
 }
+
+/** Palavras faladas (ignora pontuação). */
+export const contarPalavras = (texto: string) => (texto.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)*/gu) ?? []).length;
+
+export const ROTEIRO_MIN = 25;
+export const ROTEIRO_MAX = 40;
+
+/** Roteiro narrado do Reel: 25 a 40 palavras (~12–15 s). Devolve a mensagem de erro ou null. */
+export function validarRoteiro(texto: string | null | undefined): string | null {
+  const n = contarPalavras(texto ?? "");
+  if (n < ROTEIRO_MIN || n > ROTEIRO_MAX) return `roteiro: use de ${ROTEIRO_MIN} a ${ROTEIRO_MAX} palavras (tem ${n})`;
+  return null;
+}

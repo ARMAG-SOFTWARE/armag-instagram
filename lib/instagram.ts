@@ -75,3 +75,28 @@ export async function publicarImagem(imageUrl: string, legenda = "") {
 
   return { containerId, mediaId, permalink };
 }
+
+/* ---------- Reels (publicação em duas etapas, sem esperar dentro da função) ---------- */
+
+/** Etapa 1: cria o container do Reel. O Instagram baixa e processa o vídeo depois (pode levar minutos). */
+export async function criarContainerReel(videoUrl: string, legenda: string, capaUrl?: string | null): Promise<string> {
+  const igUserId = env("IG_USER_ID");
+  const params: Record<string, string> = { media_type: "REELS", video_url: videoUrl, caption: legenda, share_to_feed: "true" };
+  if (capaUrl) params.cover_url = capaUrl;
+  const { id } = await graphPost<{ id: string }>(`${igUserId}/media`, params);
+  return id;
+}
+
+/** FINISHED, IN_PROGRESS, ERROR, EXPIRED ou PUBLISHED. */
+export async function statusContainer(containerId: string): Promise<string> {
+  const { status_code } = await graphGet<{ status_code: string }>(containerId, { fields: "status_code" });
+  return status_code;
+}
+
+/** Etapa 2: publica um container já processado. */
+export async function publicarContainer(containerId: string) {
+  const igUserId = env("IG_USER_ID");
+  const { id: mediaId } = await graphPost<{ id: string }>(`${igUserId}/media_publish`, { creation_id: containerId });
+  const { permalink } = await graphGet<{ permalink?: string }>(mediaId, { fields: "permalink" });
+  return { mediaId, permalink };
+}

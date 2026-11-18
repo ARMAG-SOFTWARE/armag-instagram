@@ -1,9 +1,9 @@
 // Acesso às tabelas public.criativos e public.horarios_postagem (somente servidor, service role).
 import { supabaseAdmin } from "./servidor";
-import { formatarAgendado, type Horario } from "./agenda";
+import { formatarAgendado, type Formato, type Horario } from "./agenda";
 import type { Tipo } from "./schema";
 
-export type Status = "rascunho" | "agendado" | "publicando" | "publicado" | "erro" | "cancelado";
+export type Status = "rascunho" | "renderizando" | "agendado" | "processando" | "publicando" | "publicado" | "erro" | "cancelado";
 
 export type Criativo = {
   id: string;
@@ -24,6 +24,11 @@ export type Criativo = {
   permalink: string | null;
   erro: string | null;
   tentativas: number;
+  formato: Formato;
+  roteiro: string | null;
+  video_url: string | null;
+  container_id: string | null;
+  processando_desde: string | null;
 };
 
 const db = () => supabaseAdmin();
@@ -44,8 +49,10 @@ export async function listar(status?: Status[], limite = 50): Promise<Criativo[]
   return ok(await q, "listar") as Criativo[];
 }
 
-export async function inserir(c: Omit<Criativo, "id" | "criado_em" | "image_url" | "status" | "agendado_para" | "publicado_em" | "media_id" | "permalink" | "erro" | "tentativas">) {
-  return ok(await db().from("criativos").insert({ ...c, status: "rascunho" }).select("*").single(), "inserir") as Criativo;
+type NovoCriativo = Pick<Criativo, "tipo" | "titulo" | "titulo_px" | "subtitulo" | "itens" | "cta" | "legenda" | "tema" | "formato" | "roteiro">;
+
+export async function inserir(c: NovoCriativo, status: Status = "rascunho") {
+  return ok(await db().from("criativos").insert({ ...c, status }).select("*").single(), "inserir") as Criativo;
 }
 
 export async function atualizar(id: string, patch: Partial<Criativo>) {
@@ -73,7 +80,7 @@ export async function historicoParaGerar() {
 }
 
 export async function horarios(): Promise<Horario[]> {
-  return ok(await db().from("horarios_postagem").select("dia_semana, hora, ativo").order("dia_semana"), "horarios") as Horario[];
+  return ok(await db().from("horarios_postagem").select("dia_semana, hora, ativo, formato").order("dia_semana"), "horarios") as Horario[];
 }
 
 export async function salvarHorarios(lista: Horario[]) {
@@ -82,7 +89,7 @@ export async function salvarHorarios(lista: Horario[]) {
 
 /** Agendados (e em publicação) a partir de agora — para não marcar 2 posts no mesmo dia. */
 export async function agendadosFuturos(excetoId?: string): Promise<Criativo[]> {
-  let q = db().from("criativos").select("*").in("status", ["agendado", "publicando"]).not("agendado_para", "is", null);
+  let q = db().from("criativos").select("*").in("status", ["agendado", "processando", "publicando"]).not("agendado_para", "is", null);
   if (excetoId) q = q.neq("id", excetoId);
   return ok(await q, "agendados") as Criativo[];
 }
@@ -92,6 +99,11 @@ export async function vencidos(agora: Date): Promise<Criativo[]> {
     await db().from("criativos").select("*").eq("status", "agendado").lte("agendado_para", agora.toISOString()).order("agendado_para"),
     "vencidos",
   ) as Criativo[];
+}
+
+/** Reels enviados ao Instagram aguardando o processamento terminar. */
+export async function emProcessamento(): Promise<Criativo[]> {
+  return ok(await db().from("criativos").select("*").eq("status", "processando").order("processando_desde"), "processando") as Criativo[];
 }
 
 /** Criativo com o texto pronto do agendamento ("quarta, 18/11 às 12:00"). */
