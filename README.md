@@ -50,3 +50,30 @@ curl -X POST https://SEU-SITE.vercel.app/api/instagram/publicar \
 - 100 posts via API a cada 24 h
 - Se o token parar de funcionar (troca de senha do Facebook, remoção do app),
   gere outro no Explorador da Graph API e atualize `META_PAGE_TOKEN` na Vercel
+
+---
+
+# Criativos do dia (geração + publicação automática)
+
+```
+criativos/
+  template.html          layout 1080x1080 da marca (preto e dourado)
+  marca/                 brasão, logo e fontes (Cinzel + Inter)
+  rascunhos/<pasta>/     post.json + imagem.jpg + legenda.txt  → NÃO publica
+  fila/<pasta>/          imagem.jpg + legenda.txt              → o Action publica
+  publicados/<pasta>/    movido para cá após publicar, com resultado.json
+scripts/criativo.py      gera imagem.jpg e legenda.txt a partir do post.json
+.github/workflows/publicar-instagram.yml
+```
+
+Fluxo:
+1. Gerar o rascunho: `python3 scripts/criativo.py criativos/rascunhos/<pasta>/post.json`
+2. Aprovar: mover a pasta de `rascunhos/` para `fila/` e fazer push na `main`.
+3. O GitHub Action chama `POST <ARMAG_SITE_URL>/api/instagram/publicar` e, se der certo,
+   move a pasta para `publicados/` (commit com `[skip ci]`).
+
+Secrets do repositório (Settings → Secrets and variables → Actions):
+- `ARMAG_SITE_URL` — endereço do site na Vercel, ex.: `https://armag-instagram.vercel.app`
+- `INSTAGRAM_PUBLISH_SECRET` — o mesmo valor da variável de mesmo nome na Vercel
+
+O `vercel.json` faz a Vercel ignorar commits que só mexem em criativos/scripts/Action.

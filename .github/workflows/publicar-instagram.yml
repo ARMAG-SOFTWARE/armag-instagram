@@ -1,0 +1,77 @@
+name: Publicar no Instagram
+
+# Publica cada pasta nova em criativos/fila/<pasta>/ (imagem.jpg + legenda.txt)
+# chamando a rota do site na Vercel, e depois move a pasta para criativos/publicados/.
+# Rascunhos ficam em criativos/rascunhos/ e NÃO são publicados.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "criativos/fila/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publicar-instagram
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publicar pastas da fila
+        env:
+          SITE_URL: ${{ secrets.ARMAG_SITE_URL }}
+          CHAVE: ${{ secrets.INSTAGRAM_PUBLISH_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SITE_URL:-}" ] || [ -z "${CHAVE:-}" ]; then
+            echo "::error::Configure os secrets ARMAG_SITE_URL e INSTAGRAM_PUBLISH_SECRET"; exit 1
+          fi
+          SITE_URL="${SITE_URL%/}"
+          publicou=0
+          falhou=0
+          shopt -s nullglob
+          for pasta in criativos/fila/*/; do
+            pasta="${pasta%/}"
+            nome="$(basename "$pasta")"
+            img="$pasta/imagem.jpg"
+            if [ ! -f "$img" ]; then
+              echo "::warning::$nome sem imagem.jpg, pulando"; continue
+            fi
+            legenda=""
+            [ -f "$pasta/legenda.txt" ] && legenda="$(cat "$pasta/legenda.txt")"
+
+            echo "Publicando $nome..."
+            codigo=$(curl -sS -o resposta.json -w "%{http_code}" --max-time 120 \
+              -X POST "$SITE_URL/api/instagram/publicar" \
+              -H "x-api-key: $CHAVE" \
+              -F "imagem=@$img;type=image/jpeg" \
+              --form-string "legenda=$legenda") || codigo="000"
+            cat resposta.json || true; echo
+
+            if [ "$codigo" = "200" ] && grep -Eq '"ok"[[:space:]]*:[[:space:]]*true' resposta.json; then
+              mkdir -p criativos/publicados
+              cp resposta.json "$pasta/resultado.json"
+              git mv "$pasta" "criativos/publicados/$nome"
+              publicou=$((publicou+1))
+            else
+              echo "::error::Falha ao publicar $nome (HTTP $codigo)"
+              falhou=$((falhou+1))
+            fi
+          done
+          rm -f resposta.json
+
+          if [ "$publicou" -gt 0 ]; then
+            git config user.name "armag-bot"
+            git config user.email "armag-bot@users.noreply.github.com"
+            git add -A criativos
+            git commit -m "Publicados no Instagram: $publicou post(s) [skip ci]"
+            git push
+          fi
+          [ "$falhou" -eq 0 ]

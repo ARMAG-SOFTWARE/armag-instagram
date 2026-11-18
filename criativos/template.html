@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Cinzel"; font-weight: 600; src: url("marca/fonts/cinzel-latin-600-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Cinzel"; font-weight: 700; src: url("marca/fonts/cinzel-latin-700-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Cinzel"; font-weight: 800; src: url("marca/fonts/cinzel-latin-800-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 400; src: url("marca/fonts/inter-latin-400-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 500; src: url("marca/fonts/inter-latin-500-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 600; src: url("marca/fonts/inter-latin-600-normal.woff2") format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; src: url("marca/fonts/inter-latin-700-normal.woff2") format("woff2"); }
+
+  :root {
+    --preto: #070707;
+    --ouro: #d4a94f;
+    --ouro-claro: #f3d58c;
+    --ouro-escuro: #8a6424;
+    --texto: #efe6d2;
+    --texto-2: #b9ad93;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1080px; }
+  body {
+    background:
+      radial-gradient(900px 600px at 85% 8%, rgba(212,169,79,.16), transparent 60%),
+      radial-gradient(700px 500px at 0% 100%, rgba(212,169,79,.10), transparent 60%),
+      var(--preto);
+    color: var(--texto);
+    font-family: "Inter", sans-serif;
+    position: relative;
+    overflow: hidden;
+  }
+  .moldura {
+    position: absolute; inset: 36px;
+    border: 1.5px solid rgba(212,169,79,.35);
+    border-radius: 28px;
+  }
+  .brasao-fundo {
+    position: absolute; right: -90px; bottom: -40px; width: 560px;
+    opacity: .10; mix-blend-mode: screen; filter: grayscale(.2);
+  }
+  .conteudo {
+    position: absolute; inset: 36px; padding: 64px 72px;
+    display: flex; flex-direction: column;
+  }
+  .topo { display: flex; align-items: center; gap: 18px; }
+  .topo img { width: 58px; mix-blend-mode: screen; }
+  .marca {
+    font-family: "Cinzel"; font-weight: 800; font-size: 34px; letter-spacing: 6px;
+    background: linear-gradient(180deg, var(--ouro-claro), var(--ouro) 55%, var(--ouro-escuro));
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .selo {
+    margin-left: auto;
+    font-weight: 700; font-size: 20px; letter-spacing: 4px; text-transform: uppercase;
+    color: var(--preto); background: linear-gradient(180deg, var(--ouro-claro), var(--ouro));
+    padding: 10px 20px; border-radius: 999px;
+  }
+  .meio { margin-top: auto; margin-bottom: auto; padding-top: 30px; }
+  .titulo {
+    font-family: "Cinzel"; font-weight: 700; line-height: 1.08; letter-spacing: .5px;
+    background: linear-gradient(180deg, #fff2c9, var(--ouro) 60%, #a77a2c);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .linha {
+    width: 120px; height: 3px; margin: 34px 0 30px;
+    background: linear-gradient(90deg, var(--ouro), transparent);
+  }
+  .subtitulo { font-size: 32px; line-height: 1.4; color: var(--texto); font-weight: 500; max-width: 820px; }
+  .itens { list-style: none; margin-top: 34px; display: grid; gap: 18px; }
+  .itens li { font-size: 28px; color: var(--texto); display: flex; gap: 16px; align-items: baseline; }
+  .itens li::before {
+    content: ""; flex: 0 0 12px; height: 12px; transform: rotate(45deg) translateY(-3px);
+    background: linear-gradient(135deg, var(--ouro-claro), var(--ouro));
+  }
+  .rodape {
+    display: flex; align-items: center; justify-content: space-between;
+    border-top: 1px solid rgba(212,169,79,.25); padding-top: 28px;
+  }
+  .cta { font-size: 26px; font-weight: 700; color: var(--ouro-claro); }
+  .arroba { font-size: 24px; color: var(--texto-2); letter-spacing: 1px; }
+</style>
+</head>
+<body>
+  <div class="moldura"></div>
+  <img class="brasao-fundo" src="marca/brasao.png" alt="">
+  <div class="conteudo">
+    <div class="topo">
+      <img src="marca/brasao.png" alt="">
+      <div class="marca">ARMAG</div>
+      <div class="selo" id="selo"></div>
+    </div>
+    <div class="meio">
+      <h1 class="titulo" id="titulo"></h1>
+      <div class="linha"></div>
+      <p class="subtitulo" id="subtitulo"></p>
+      <ul class="itens" id="itens"></ul>
+    </div>
+    <div class="rodape">
+      <div class="cta" id="cta"></div>
+      <div class="arroba">@armag.soft</div>
+    </div>
+  </div>
+<script>
+  // Preenchido pelo scripts/criativo.py via window.DADOS
+  const d = window.DADOS || {};
+  document.getElementById("selo").textContent = d.selo || "";
+  const t = document.getElementById("titulo");
+  t.textContent = d.titulo || "";
+  t.style.fontSize = (d.titulo_px || 76) + "px";
+  document.getElementById("subtitulo").textContent = d.subtitulo || "";
+  const ul = document.getElementById("itens");
+  (d.itens || []).forEach(i => { const li = document.createElement("li"); li.textContent = i; ul.appendChild(li); });
+  document.getElementById("cta").textContent = d.cta || "Fale com a ARMAG · link na bio";
+</script>
+</body>
+</html>
