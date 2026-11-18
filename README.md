@@ -143,3 +143,40 @@ Todas exigem o header `x-api-key: <INSTAGRAM_PUBLISH_SECRET>`, menos o cron (`Au
 - Testes: `npm test` (agendamento no fuso de SP, validação do texto, tamanho do título).
 - O `vercel.json` não faz deploy de commits que só mexem em `criativos/` ou `*.md`.
   Se mudar o `PADRAO.md`, faça um **Redeploy** manual para a tela usar o texto novo.
+
+---
+
+# Reels (vídeo animado com a voz do Jeff)
+
+Nos dias marcados como **Reel** em *Horários de postagem* (padrão: quarta e sexta), o criativo do dia vira um
+**Reel de 12 a 20 s**: os mesmos textos animados no visual da ARMAG, música e narração com a voz do Jeff
+(Piper, licença CC0). Tudo gratuito: o vídeo é montado no **GitHub Actions** deste repositório.
+
+Fluxo na tela: **Gerar** → "Montando o vídeo…" (2 a 4 min, a tela atualiza sozinha) → prévia do vídeo →
+**Editar textos / roteiro** (monta de novo) ou **Gerar outro** → **Pode postar** (só agenda em dia de Reel).
+
+A publicação é feita em duas etapas pelo cron (a cada 5 min): envia o vídeo ao Instagram e, quando o
+Instagram termina de processar, publica. Nenhuma chamada passa de 60 s e o mesmo Reel nunca sai duas vezes.
+
+## Configuração (uma vez)
+
+1. **Supabase → SQL Editor:** rode `supabase/migrations/0003_reels.sql`.
+2. **GitHub → Settings → Secrets and variables → Actions → New repository secret:**
+   - `SUPABASE_URL` — `https://wufegihensmnfqxsinae.supabase.co`
+   - `SUPABASE_SERVICE_ROLE_KEY` — a mesma service_role usada na Vercel
+3. **Token do GitHub para a Vercel disparar a montagem:**
+   GitHub → foto do perfil → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**
+   - Resource owner: **ARMAG-SOFTWARE** · Repository access: **Only select repositories → armag-instagram**
+   - Permissions → Repository → **Actions: Read and write** (o resto fica sem acesso)
+   - Expiração: a maior disponível (anote para renovar)
+4. **Vercel → Environment Variables:** `GITHUB_TOKEN_REELS` = o token do passo 3 → **Redeploy**.
+
+O workflow `.github/workflows/reel.yml` precisa estar na `main` para poder ser disparado.
+
+## Arquivos
+- `scripts/reel/montar.mjs` — orquestra: narração → música → quadros → MP4 → Supabase
+  (teste local: `node scripts/reel/montar.mjs --local scripts/reel/exemplo.json --saida /tmp/reel`).
+- `scripts/reel/narrar.py` — voz do Jeff, frase por frase (mede os tempos para sincronizar as cenas).
+- `scripts/reel/audio.py` — música e efeitos sintetizados + mixagem (voz por cima, −14 LUFS).
+- `scripts/reel/composicao.html` — a animação 1080×1920, desenhada quadro a quadro.
+- `lib/criativos/reel.ts` — publicação em duas etapas; `lib/criativos/github.ts` — dispara o workflow.

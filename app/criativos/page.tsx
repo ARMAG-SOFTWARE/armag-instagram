@@ -9,7 +9,8 @@ const FUNDO_CARTAO = "#141210";
 const BORDA = "#3a3226";
 const CHAVE_LS = "armag_ig_key";
 
-type Status = "rascunho" | "agendado" | "publicando" | "publicado" | "erro" | "cancelado";
+type Status = "rascunho" | "renderizando" | "agendado" | "processando" | "publicando" | "publicado" | "erro" | "cancelado";
+type Formato = "imagem" | "reel";
 type Criativo = {
   id: string;
   tipo: "Serviço" | "Dica";
@@ -28,11 +29,17 @@ type Criativo = {
   permalink: string | null;
   erro: string | null;
   tentativas: number;
+  formato: Formato;
+  roteiro: string | null;
+  video_url: string | null;
 };
-type Horario = { dia_semana: number; hora: string; ativo: boolean };
+type Horario = { dia_semana: number; hora: string; ativo: boolean; formato: Formato };
 
 const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 const LIMITES = { titulo: 40, subtitulo: 110, item: 35, cta: 60, legenda: 2200 };
+const ROTEIRO = { min: 25, max: 40 };
+const palavras = (t: string) => (t.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)*/gu) ?? []).length;
+const rotuloFormato = (f: Formato) => (f === "reel" ? "🎬 Reel" : "🖼 Imagem");
 
 const lerLS = () => {
   try {
@@ -97,7 +104,7 @@ export default function Criativos() {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro" | "info"; texto: string } | null>(null);
   const [editando, setEditando] = useState(false);
-  const [form, setForm] = useState({ titulo: "", subtitulo: "", itens: ["", "", "", ""], cta: "", legenda: "" });
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", itens: ["", "", "", ""], cta: "", legenda: "", roteiro: "" });
 
   useEffect(() => {
     setChave(lerLS());
@@ -126,15 +133,15 @@ export default function Criativos() {
   const carregar = useCallback(async () => {
     try {
       const [r, a, p, h] = await Promise.all([
-        api<{ criativos: Criativo[] }>("/api/criativos?status=rascunho&limite=1"),
-        api<{ criativos: Criativo[] }>("/api/criativos?status=agendado,publicando"),
+        api<{ criativos: Criativo[] }>("/api/criativos?status=rascunho,renderizando&limite=1"),
+        api<{ criativos: Criativo[] }>("/api/criativos?status=agendado,processando,publicando"),
         api<{ criativos: Criativo[] }>("/api/criativos?status=publicado,erro&limite=20"),
         api<{ horarios: Horario[] }>("/api/horarios"),
       ]);
       setAtual(r.criativos[0] ?? null);
       setAgendados([...a.criativos].sort((x, y) => (x.agendado_para ?? "").localeCompare(y.agendado_para ?? "")));
       setPublicados(p.criativos);
-      setHorarios(h.horarios.map((x) => ({ ...x, hora: x.hora.slice(0, 5) })));
+      setHorarios(h.horarios.map((x) => ({ ...x, hora: x.hora.slice(0, 5), formato: x.formato ?? "imagem" })));
     } catch (e) {
       setMsg({ tipo: "erro", texto: String(e instanceof Error ? e.message : e) });
     }
@@ -143,6 +150,14 @@ export default function Criativos() {
   useEffect(() => {
     if (chave) void carregar();
   }, [chave, carregar]);
+
+  // enquanto o vídeo do Reel é montado no GitHub, atualiza a cada 5 s
+  const montando = atual?.status === "renderizando";
+  useEffect(() => {
+    if (!chave || !montando) return;
+    const t = setInterval(() => void carregar(), 5000);
+    return () => clearInterval(t);
+  }, [chave, montando, carregar]);
 
   async function acao(rotulo: string, fn: () => Promise<void>) {
     setOcupado(rotulo);
@@ -156,16 +171,20 @@ export default function Criativos() {
     }
   }
 
-  function gerar(descartar?: string) {
+  function gerar(descartar?: string, formato?: Formato) {
     return acao("gerar", async () => {
       setEditando(false);
-      const r = await api<{ criativo: Criativo }>("/api/criativos/gerar", { method: "POST", body: descartar ? { descartar_id: descartar } : {} });
+      const r = await api<{ criativo: Criativo }>("/api/criativos/gerar", {
+        method: "POST",
+        body: { ...(descartar ? { descartar_id: descartar } : {}), ...(formato ? { formato } : {}) },
+      });
       setAtual(r.criativo);
+      await carregar();
     });
   }
 
   function abrirEdicao(c: Criativo) {
-    setForm({ titulo: c.titulo, subtitulo: c.subtitulo, itens: [0, 1, 2, 3].map((i) => c.itens[i] ?? ""), cta: c.cta, legenda: c.legenda });
+    setForm({ titulo: c.titulo, subtitulo: c.subtitulo, itens: [0, 1, 2, 3].map((i) => c.itens[i] ?? ""), cta: c.cta, legenda: c.legenda, roteiro: c.roteiro ?? "" });
     setEditando(true);
   }
 
@@ -173,11 +192,11 @@ export default function Criativos() {
     return acao("editar", async () => {
       const r = await api<{ criativo: Criativo }>(`/api/criativos/${c.id}`, {
         method: "PATCH",
-        body: { ...form, itens: form.itens.map((i) => i.trim()).filter(Boolean) },
+        body: { ...form, itens: form.itens.map((i) => i.trim()).filter(Boolean), ...(c.formato === "reel" ? {} : { roteiro: undefined }) },
       });
       setAtual(r.criativo);
       setEditando(false);
-      setMsg({ tipo: "ok", texto: "Textos salvos e imagem regenerada." });
+      setMsg({ tipo: "ok", texto: c.formato === "reel" ? "Textos salvos. Montando o vídeo de novo (2 a 4 min)…" : "Textos salvos e imagem regenerada." });
     });
   }
 
@@ -192,8 +211,12 @@ export default function Criativos() {
   function publicarAgora(c: Criativo) {
     if (!window.confirm("Publicar agora no Instagram @armag.soft? Isso não pode ser desfeito.")) return;
     return acao("publicar", async () => {
-      const r = await api<{ criativo?: Criativo }>(`/api/criativos/${c.id}/publicar-agora`, { method: "POST" });
-      setMsg({ tipo: "ok", texto: `Publicado! ${r.criativo?.permalink ?? ""}` });
+      const r = await api<{ criativo?: Criativo; processando?: boolean }>(`/api/criativos/${c.id}/publicar-agora`, { method: "POST" });
+      setMsg(
+        r.processando
+          ? { tipo: "ok", texto: "Reel enviado ao Instagram. Ele sai em alguns minutos, assim que o Instagram terminar de processar o vídeo." }
+          : { tipo: "ok", texto: `Publicado! ${r.criativo?.permalink ?? ""}` },
+      );
       await carregar();
     });
   }
@@ -206,7 +229,16 @@ export default function Criativos() {
     });
   }
 
+  function montarDeNovo(c: Criativo) {
+    return acao(`retry-${c.id}`, async () => {
+      await api(`/api/criativos/${c.id}`, { method: "PATCH", body: {} });
+      setMsg({ tipo: "info", texto: "Montando o vídeo de novo (2 a 4 min)…" });
+      await carregar();
+    });
+  }
+
   function tentarDeNovo(c: Criativo) {
+    if (c.formato === "reel" && !c.video_url) return montarDeNovo(c);
     return acao(`retry-${c.id}`, async () => {
       const r = await api<{ criativo: Criativo }>(`/api/criativos/${c.id}/aprovar`, { method: "POST" });
       setMsg({ tipo: "ok", texto: `Reagendado para ${r.criativo.agendado_texto}.` });
@@ -217,7 +249,7 @@ export default function Criativos() {
   function salvarHorarios() {
     return acao("horarios", async () => {
       const r = await api<{ horarios: Horario[] }>("/api/horarios", { method: "PUT", body: { horarios } });
-      setHorarios(r.horarios.map((x) => ({ ...x, hora: x.hora.slice(0, 5) })));
+      setHorarios(r.horarios.map((x) => ({ ...x, hora: x.hora.slice(0, 5), formato: x.formato ?? "imagem" })));
       setMsg({ tipo: "ok", texto: "Horários salvos. Valem para os próximos agendamentos." });
     });
   }
@@ -282,15 +314,36 @@ export default function Criativos() {
       <section style={s.cartao}>
         <h2 style={s.h2}>Criativo do dia</h2>
         {!c && (
-          <button style={{ ...s.botaoOuro(gerando), width: "100%", fontSize: 18, padding: 18 }} disabled={!!ocupado} onClick={() => void gerar()}>
-            {gerando ? <TextoCarregando /> : "Gerar criativo do dia"}
-          </button>
+          <>
+            <button style={{ ...s.botaoOuro(gerando), width: "100%", fontSize: 18, padding: 18 }} disabled={!!ocupado} onClick={() => void gerar()}>
+              {gerando ? <TextoCarregando /> : "Gerar criativo do dia"}
+            </button>
+            <div style={{ textAlign: "center", marginTop: 10, fontSize: 14, opacity: 0.8 }}>
+              O formato segue o dia em Horários de postagem. Ou gere como{" "}
+              <button style={s.link} disabled={!!ocupado} onClick={() => void gerar(undefined, "imagem")}>imagem</button> ou{" "}
+              <button style={s.link} disabled={!!ocupado} onClick={() => void gerar(undefined, "reel")}>reel</button>.
+            </div>
+          </>
         )}
 
         {c && (
           <div style={{ display: "grid", gap: 14 }}>
-            <div style={{ position: "relative", width: "100%", aspectRatio: "1 / 1", borderRadius: 12, overflow: "hidden", border: `1px solid ${BORDA}`, background: "#070707" }}>
-              {c.image_url ? (
+            <div
+              style={{
+                position: "relative", width: c.formato === "reel" ? "min(100%, 360px)" : "100%", margin: "0 auto",
+                aspectRatio: c.formato === "reel" ? "9 / 16" : "1 / 1", borderRadius: 12, overflow: "hidden", border: `1px solid ${BORDA}`, background: "#070707",
+              }}
+            >
+              {c.status === "renderizando" ? (
+                <div style={{ display: "grid", placeItems: "center", height: "100%", textAlign: "center", padding: 20 }}>
+                  <div>
+                    <div style={{ color: DOURADO, fontWeight: 800, fontSize: 18 }}>Montando o vídeo…</div>
+                    <div style={{ opacity: 0.7, fontSize: 14, marginTop: 6 }}>Leva de 2 a 4 minutos. Esta tela atualiza sozinha.</div>
+                  </div>
+                </div>
+              ) : c.formato === "reel" && c.video_url ? (
+                <video src={c.video_url} poster={c.image_url ?? undefined} controls playsInline style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+              ) : c.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={c.image_url} alt={c.titulo} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", opacity: ocupado ? 0.5 : 1 }} />
               ) : (
@@ -299,6 +352,7 @@ export default function Criativos() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={s.selo}>{c.tipo}</span>
+              <span style={{ ...s.selo, background: "transparent", color: DOURADO, border: `1px solid ${DOURADO}` }}>{rotuloFormato(c.formato)}</span>
               <span style={{ opacity: 0.7, fontSize: 13 }}>Tema: {c.tema}</span>
             </div>
 
@@ -307,18 +361,26 @@ export default function Criativos() {
                 <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", margin: 0, fontSize: 15, lineHeight: 1.5, background: "#0f0e0c", padding: 14, borderRadius: 10, border: `1px solid ${BORDA}` }}>
                   {c.legenda}
                 </pre>
+                {c.formato === "reel" && c.roteiro && (
+                  <div style={{ fontSize: 14, background: "#0f0e0c", padding: 12, borderRadius: 10, border: `1px solid ${BORDA}` }}>
+                    <b style={{ color: DOURADO }}>Narração (voz do Jeff):</b> {c.roteiro}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void copiarLegenda(c.legenda)}>Copiar legenda</button>
-                  <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => abrirEdicao(c)}>Editar textos</button>
-                  <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void gerar(c.id)}>
+                  <button style={s.botao(!!ocupado || montando)} disabled={!!ocupado || montando} onClick={() => abrirEdicao(c)}>Editar textos</button>
+                  <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void gerar(c.id, c.formato)}>
                     {gerando ? "Gerando outro…" : "Gerar outro"}
                   </button>
+                  <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void gerar(c.id, c.formato === "reel" ? "imagem" : "reel")}>
+                    {c.formato === "reel" ? "Gerar como imagem" : "Gerar como reel"}
+                  </button>
                 </div>
-                <button style={{ ...s.botaoOuro(!!ocupado), width: "100%", fontSize: 18, padding: 16 }} disabled={!!ocupado} onClick={() => void aprovar(c)}>
+                <button style={{ ...s.botaoOuro(!!ocupado || montando), width: "100%", fontSize: 18, padding: 16 }} disabled={!!ocupado || montando} onClick={() => void aprovar(c)}>
                   {ocupado === "aprovar" ? "Agendando…" : "Pode postar"}
                 </button>
                 <div style={{ textAlign: "center" }}>
-                  <button style={s.link} disabled={!!ocupado} onClick={() => void publicarAgora(c)}>
+                  <button style={s.link} disabled={!!ocupado || montando} onClick={() => void publicarAgora(c)}>
                     {ocupado === "publicar" ? "Publicando… (até 30 s)" : "Publicar agora"}
                   </button>
                 </div>
@@ -344,9 +406,20 @@ export default function Criativos() {
                 ))}
                 <Campo rotulo="CTA" valor={form.cta} max={LIMITES.cta} onChange={(v) => setForm({ ...form, cta: v })} />
                 <Campo rotulo="Legenda" valor={form.legenda} max={LIMITES.legenda} multilinha onChange={(v) => setForm({ ...form, legenda: v })} />
+                {c.formato === "reel" && (
+                  <label style={{ display: "grid", gap: 6 }}>
+                    <span style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
+                      Narração (voz do Jeff)
+                      <small style={{ color: palavras(form.roteiro) < ROTEIRO.min || palavras(form.roteiro) > ROTEIRO.max ? "#ff7b7b" : undefined, opacity: 0.8 }}>
+                        {palavras(form.roteiro)} palavras ({ROTEIRO.min} a {ROTEIRO.max})
+                      </small>
+                    </span>
+                    <textarea value={form.roteiro} onChange={(e) => setForm({ ...form, roteiro: e.target.value })} rows={4} style={{ ...s.campo, resize: "vertical" }} />
+                  </label>
+                )}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button type="submit" style={s.botaoOuro(!!ocupado)} disabled={!!ocupado}>
-                    {ocupado === "editar" ? "Desenhando a arte…" : "Salvar e regenerar imagem"}
+                    {ocupado === "editar" ? "Salvando…" : c.formato === "reel" ? "Salvar e montar o vídeo de novo" : "Salvar e regenerar imagem"}
                   </button>
                   <button type="button" style={s.botao()} onClick={() => setEditando(false)}>Cancelar</button>
                 </div>
@@ -369,7 +442,8 @@ export default function Criativos() {
             <div style={{ flex: "1 1 180px", minWidth: 0 }}>
               <div style={{ fontWeight: 700 }}>{a.titulo}</div>
               <div style={{ fontSize: 13, opacity: 0.75 }}>
-                {a.status === "publicando" ? "Publicando agora…" : `Agendado para ${a.agendado_texto}`}
+                {rotuloFormato(a.formato)} ·{" "}
+                {a.status === "publicando" ? "Publicando agora…" : a.status === "processando" ? "Instagram processando o vídeo…" : `Agendado para ${a.agendado_texto}`}
                 {a.erro && a.status === "agendado" ? ` · nova tentativa (${a.tentativas}/3): ${a.erro}` : ""}
               </div>
             </div>
@@ -394,7 +468,7 @@ export default function Criativos() {
               <div style={{ fontWeight: 700 }}>{p.titulo}</div>
               {p.status === "publicado" ? (
                 <div style={{ fontSize: 13, opacity: 0.75 }}>
-                  {dataHora(p.publicado_em)}{" "}
+                  {rotuloFormato(p.formato)} · {dataHora(p.publicado_em)}{" "}
                   {p.permalink && (
                     <a href={p.permalink} target="_blank" rel="noreferrer" style={{ color: DOURADO }}>Ver no Instagram</a>
                   )}
@@ -404,7 +478,9 @@ export default function Criativos() {
               )}
             </div>
             {p.status === "erro" && (
-              <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void tentarDeNovo(p)}>Tentar de novo</button>
+              <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void tentarDeNovo(p)}>
+                {p.formato === "reel" && !p.video_url ? "Montar o vídeo de novo" : "Tentar de novo"}
+              </button>
             )}
           </div>
         ))}
@@ -414,11 +490,11 @@ export default function Criativos() {
       <section style={s.cartao}>
         <h2 style={s.h2}>Horários de postagem</h2>
         <p style={{ fontSize: 13, opacity: 0.7, margin: "0 0 10px" }}>
-          Os posts aprovados saem no horário do dia. Se o horário de hoje já passou, vai para o próximo dia ativo.
+          Os posts aprovados saem no horário do dia. Se o horário de hoje já passou, vai para o próximo dia ativo do mesmo formato (Reel só sai em dia de Reel).
         </p>
         {horarios.map((h) => (
-          <div key={h.dia_semana} style={{ ...s.linha, justifyContent: "space-between" }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+          <div key={h.dia_semana} style={{ ...s.linha, justifyContent: "space-between", flexWrap: "nowrap", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", minWidth: 0 }}>
               <input
                 type="checkbox"
                 checked={h.ativo}
@@ -427,13 +503,25 @@ export default function Criativos() {
               />
               <span style={{ opacity: h.ativo ? 1 : 0.5 }}>{DIAS[h.dia_semana]}</span>
             </label>
+            <div style={{ display: "flex", gap: 6, marginLeft: "auto", flex: "none" }}>
+            <select
+              value={h.formato}
+              disabled={!h.ativo}
+              onChange={(e) => setHorarios(horarios.map((x) => (x.dia_semana === h.dia_semana ? { ...x, formato: e.target.value as Formato } : x)))}
+              style={{ ...s.campo, width: 96, padding: "10px 6px", fontSize: 14, opacity: h.ativo ? 1 : 0.5 }}
+              aria-label={`Formato de ${DIAS[h.dia_semana]}`}
+            >
+              <option value="imagem">Imagem</option>
+              <option value="reel">Reel</option>
+            </select>
             <input
               type="time"
               value={h.hora}
               disabled={!h.ativo}
               onChange={(e) => setHorarios(horarios.map((x) => (x.dia_semana === h.dia_semana ? { ...x, hora: e.target.value } : x)))}
-              style={{ ...s.campo, width: 130, opacity: h.ativo ? 1 : 0.5 }}
+              style={{ ...s.campo, width: 104, padding: "10px 6px", fontSize: 14, opacity: h.ativo ? 1 : 0.5 }}
             />
+            </div>
           </div>
         ))}
         <button style={{ ...s.botaoOuro(!!ocupado), marginTop: 12, width: "100%" }} disabled={!!ocupado || horarios.length === 0} onClick={() => void salvarHorarios()}>
