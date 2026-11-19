@@ -84,3 +84,15 @@ describe("formato por dia (Reels)", () => {
     expect(proximoFormato(new Date("2026-11-18T12:00:00Z"), H, new Set(["2026-11-18"]))).toBe("imagem");
   });
 });
+
+describe("três formatos", () => {
+  // seg imagem · ter carrossel · qua reel · qui carrossel · sex reel · sáb imagem
+  const F = ["imagem", "imagem", "carrossel", "reel", "carrossel", "reel", "imagem"] as const;
+  const H: Horario[] = PADRAO.map((h) => ({ ...h, formato: F[h.dia_semana] }));
+  it("carrossel na quarta 13h → quinta", () => {
+    expect(iso(calcularAgendamento(new Date("2026-11-18T16:00:00Z"), H, new Set(), "carrossel"))).toBe("2026-11-19T15:00:00.000Z");
+  });
+  it("proximoFormato reconhece carrossel", () => {
+    expect(proximoFormato(new Date("2026-11-18T16:00:00Z"), H, new Set())).toBe("carrossel");
+  });
+});

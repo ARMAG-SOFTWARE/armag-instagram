@@ -6,7 +6,7 @@ const base = (o: Partial<Criativo> = {}): Criativo => ({
   id: "r1", criado_em: "", tipo: "Dica", titulo: "t", titulo_px: null, subtitulo: "s", itens: [], cta: "c", legenda: "leg #armag",
   tema: "x", image_url: "https://x/capa.jpg", status: "agendado", agendado_para: "2026-11-18T15:00:00Z", publicado_em: null,
   media_id: null, permalink: null, erro: null, tentativas: 0, formato: "reel", roteiro: "r", video_url: "https://x/v.mp4",
-  container_id: null, processando_desde: null, ...o,
+  container_id: null, processando_desde: null, slides: [], imagens: [], ...o,
 });
 
 function fakes(opts: { status?: string; criarFalha?: boolean; travaLivre?: boolean } = {}) {

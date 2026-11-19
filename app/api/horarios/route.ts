@@ -11,7 +11,7 @@ const Lista = z
       dia_semana: z.number().int().min(0).max(6),
       hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d(:00)?$/),
       ativo: z.boolean(),
-      formato: z.enum(["imagem", "reel"]).default("imagem"),
+      formato: z.enum(["imagem", "carrossel", "reel"]).default("imagem"),
     }))
   .min(1)
   .max(7);

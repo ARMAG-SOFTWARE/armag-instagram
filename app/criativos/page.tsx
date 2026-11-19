@@ -10,7 +10,8 @@ const BORDA = "#3a3226";
 const CHAVE_LS = "armag_ig_key";
 
 type Status = "rascunho" | "renderizando" | "agendado" | "processando" | "publicando" | "publicado" | "erro" | "cancelado";
-type Formato = "imagem" | "reel";
+type Formato = "imagem" | "carrossel" | "reel";
+type Slide = { titulo: string; texto: string };
 type Criativo = {
   id: string;
   tipo: "Serviço" | "Dica";
@@ -32,6 +33,8 @@ type Criativo = {
   formato: Formato;
   roteiro: string | null;
   video_url: string | null;
+  slides: Slide[];
+  imagens: string[];
 };
 type Horario = { dia_semana: number; hora: string; ativo: boolean; formato: Formato };
 
@@ -39,7 +42,9 @@ const DIAS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sáb
 const LIMITES = { titulo: 40, subtitulo: 110, item: 35, cta: 60, legenda: 2200 };
 const ROTEIRO = { min: 25, max: 40 };
 const palavras = (t: string) => (t.match(/[\p{L}\p{N}]+(?:[-'][\p{L}\p{N}]+)*/gu) ?? []).length;
-const rotuloFormato = (f: Formato) => (f === "reel" ? "🎬 Reel" : "🖼 Imagem");
+const rotuloFormato = (f: Formato) => (f === "reel" ? "🎬 Reel" : f === "carrossel" ? "🗂 Carrossel" : "🖼 Imagem");
+const SLIDES = { min: 3, max: 5, titulo: 45, texto: 160 };
+const FORMATOS: Formato[] = ["imagem", "carrossel", "reel"];
 
 const lerLS = () => {
   try {
@@ -104,7 +109,7 @@ export default function Criativos() {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tipo: "ok" | "erro" | "info"; texto: string } | null>(null);
   const [editando, setEditando] = useState(false);
-  const [form, setForm] = useState({ titulo: "", subtitulo: "", itens: ["", "", "", ""], cta: "", legenda: "", roteiro: "" });
+  const [form, setForm] = useState({ titulo: "", subtitulo: "", itens: ["", "", "", ""], cta: "", legenda: "", roteiro: "", slides: [] as Slide[] });
 
   useEffect(() => {
     setChave(lerLS());
@@ -184,7 +189,7 @@ export default function Criativos() {
   }
 
   function abrirEdicao(c: Criativo) {
-    setForm({ titulo: c.titulo, subtitulo: c.subtitulo, itens: [0, 1, 2, 3].map((i) => c.itens[i] ?? ""), cta: c.cta, legenda: c.legenda, roteiro: c.roteiro ?? "" });
+    setForm({ titulo: c.titulo, subtitulo: c.subtitulo, itens: [0, 1, 2, 3].map((i) => c.itens[i] ?? ""), cta: c.cta, legenda: c.legenda, roteiro: c.roteiro ?? "", slides: (c.slides ?? []).map((x) => ({ ...x })) });
     setEditando(true);
   }
 
@@ -192,11 +197,16 @@ export default function Criativos() {
     return acao("editar", async () => {
       const r = await api<{ criativo: Criativo }>(`/api/criativos/${c.id}`, {
         method: "PATCH",
-        body: { ...form, itens: form.itens.map((i) => i.trim()).filter(Boolean), ...(c.formato === "reel" ? {} : { roteiro: undefined }) },
+        body: {
+          ...form,
+          itens: form.itens.map((i) => i.trim()).filter(Boolean),
+          ...(c.formato === "reel" ? {} : { roteiro: undefined }),
+          ...(c.formato === "carrossel" ? {} : { slides: undefined }),
+        },
       });
       setAtual(r.criativo);
       setEditando(false);
-      setMsg({ tipo: "ok", texto: c.formato === "reel" ? "Textos salvos. Montando o vídeo de novo (2 a 4 min)…" : "Textos salvos e imagem regenerada." });
+      setMsg({ tipo: "ok", texto: c.formato === "reel" ? "Textos salvos. Montando o vídeo de novo (2 a 4 min)…" : c.formato === "carrossel" ? "Textos salvos e slides regenerados." : "Textos salvos e imagem regenerada." });
     });
   }
 
@@ -320,7 +330,8 @@ export default function Criativos() {
             </button>
             <div style={{ textAlign: "center", marginTop: 10, fontSize: 14, opacity: 0.8 }}>
               O formato segue o dia em Horários de postagem. Ou gere como{" "}
-              <button style={s.link} disabled={!!ocupado} onClick={() => void gerar(undefined, "imagem")}>imagem</button> ou{" "}
+              <button style={s.link} disabled={!!ocupado} onClick={() => void gerar(undefined, "imagem")}>imagem</button>,{" "}
+              <button style={s.link} disabled={!!ocupado} onClick={() => void gerar(undefined, "carrossel")}>carrossel</button> ou{" "}
               <button style={s.link} disabled={!!ocupado} onClick={() => void gerar(undefined, "reel")}>reel</button>.
             </div>
           </>
@@ -328,6 +339,19 @@ export default function Criativos() {
 
         {c && (
           <div style={{ display: "grid", gap: 14 }}>
+            {c.formato === "carrossel" && (c.imagens?.length ?? 0) > 0 ? (
+              <div style={{ display: "flex", gap: 10, overflowX: "auto", scrollSnapType: "x mandatory", paddingBottom: 6, width: "100%", minWidth: 0 }}>
+                {c.imagens.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={url}
+                    src={url}
+                    alt={`Slide ${i + 1}`}
+                    style={{ flex: "0 0 auto", width: "78%", height: "auto", aspectRatio: "4 / 5", objectFit: "cover", minWidth: 0, borderRadius: 12, border: `1px solid ${BORDA}`, scrollSnapAlign: "center", opacity: ocupado ? 0.5 : 1 }}
+                  />
+                ))}
+              </div>
+            ) : (
             <div
               style={{
                 position: "relative", width: c.formato === "reel" ? "min(100%, 360px)" : "100%", margin: "0 auto",
@@ -350,6 +374,10 @@ export default function Criativos() {
                 <div style={{ display: "grid", placeItems: "center", height: "100%", opacity: 0.6 }}>Sem imagem</div>
               )}
             </div>
+            )}
+            {c.formato === "carrossel" && (c.imagens?.length ?? 0) > 0 && (
+              <div style={{ fontSize: 12, opacity: 0.6, textAlign: "center", marginTop: -6 }}>{c.imagens.length} slides · arraste para ver</div>
+            )}
             <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <span style={s.selo}>{c.tipo}</span>
               <span style={{ ...s.selo, background: "transparent", color: DOURADO, border: `1px solid ${DOURADO}` }}>{rotuloFormato(c.formato)}</span>
@@ -372,9 +400,11 @@ export default function Criativos() {
                   <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void gerar(c.id, c.formato)}>
                     {gerando ? "Gerando outro…" : "Gerar outro"}
                   </button>
-                  <button style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void gerar(c.id, c.formato === "reel" ? "imagem" : "reel")}>
-                    {c.formato === "reel" ? "Gerar como imagem" : "Gerar como reel"}
-                  </button>
+                  {FORMATOS.filter((f) => f !== c.formato).map((f) => (
+                    <button key={f} style={s.botao(!!ocupado)} disabled={!!ocupado} onClick={() => void gerar(c.id, f)}>
+                      Gerar como {f === "carrossel" ? "carrossel" : f}
+                    </button>
+                  ))}
                 </div>
                 <button style={{ ...s.botaoOuro(!!ocupado || montando), width: "100%", fontSize: 18, padding: 16 }} disabled={!!ocupado || montando} onClick={() => void aprovar(c)}>
                   {ocupado === "aprovar" ? "Agendando…" : "Pode postar"}
@@ -417,9 +447,33 @@ export default function Criativos() {
                     <textarea value={form.roteiro} onChange={(e) => setForm({ ...form, roteiro: e.target.value })} rows={4} style={{ ...s.campo, resize: "vertical" }} />
                   </label>
                 )}
+                {c.formato === "carrossel" && (
+                  <div style={{ display: "grid", gap: 10 }}>
+                    <div style={{ fontSize: 14 }}>
+                      Slides de conteúdo <small style={{ opacity: 0.6 }}>({SLIDES.min} a {SLIDES.max}; a capa usa título e subtítulo, o último slide usa o CTA)</small>
+                    </div>
+                    {form.slides.map((sl, i) => (
+                      <div key={i} style={{ display: "grid", gap: 8, padding: 12, borderRadius: 10, border: `1px solid ${BORDA}` }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13 }}>
+                          <b style={{ color: DOURADO }}>Slide {i + 2}</b>
+                          {form.slides.length > SLIDES.min && (
+                            <button type="button" style={s.link} onClick={() => setForm({ ...form, slides: form.slides.filter((_, j) => j !== i) })}>remover</button>
+                          )}
+                        </div>
+                        <Campo rotulo="Título" valor={sl.titulo} max={SLIDES.titulo} onChange={(v) => setForm({ ...form, slides: form.slides.map((x, j) => (j === i ? { ...x, titulo: v } : x)) })} />
+                        <Campo rotulo="Texto" valor={sl.texto} max={SLIDES.texto} multilinha linhas={3} onChange={(v) => setForm({ ...form, slides: form.slides.map((x, j) => (j === i ? { ...x, texto: v } : x)) })} />
+                      </div>
+                    ))}
+                    {form.slides.length < SLIDES.max && (
+                      <button type="button" style={s.botao()} onClick={() => setForm({ ...form, slides: [...form.slides, { titulo: "", texto: "" }] })}>
+                        + Adicionar slide
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button type="submit" style={s.botaoOuro(!!ocupado)} disabled={!!ocupado}>
-                    {ocupado === "editar" ? "Salvando…" : c.formato === "reel" ? "Salvar e montar o vídeo de novo" : "Salvar e regenerar imagem"}
+                    {ocupado === "editar" ? "Salvando…" : c.formato === "reel" ? "Salvar e montar o vídeo de novo" : c.formato === "carrossel" ? "Salvar e regenerar slides" : "Salvar e regenerar imagem"}
                   </button>
                   <button type="button" style={s.botao()} onClick={() => setEditando(false)}>Cancelar</button>
                 </div>
@@ -490,7 +544,7 @@ export default function Criativos() {
       <section style={s.cartao}>
         <h2 style={s.h2}>Horários de postagem</h2>
         <p style={{ fontSize: 13, opacity: 0.7, margin: "0 0 10px" }}>
-          Os posts aprovados saem no horário do dia. Se o horário de hoje já passou, vai para o próximo dia ativo do mesmo formato (Reel só sai em dia de Reel).
+          Os posts aprovados saem no horário do dia. Se o horário de hoje já passou, vai para o próximo dia ativo do mesmo formato (Reel só sai em dia de Reel, carrossel em dia de carrossel).
         </p>
         {horarios.map((h) => (
           <div key={h.dia_semana} style={{ ...s.linha, justifyContent: "space-between", flexWrap: "nowrap", gap: 8 }}>
@@ -512,6 +566,7 @@ export default function Criativos() {
               aria-label={`Formato de ${DIAS[h.dia_semana]}`}
             >
               <option value="imagem">Imagem</option>
+              <option value="carrossel">Carrossel</option>
               <option value="reel">Reel</option>
             </select>
             <input
@@ -532,14 +587,14 @@ export default function Criativos() {
   );
 }
 
-function Campo({ rotulo, valor, max, onChange, multilinha }: { rotulo: string; valor: string; max: number; onChange: (v: string) => void; multilinha?: boolean }) {
+function Campo({ rotulo, valor, max, onChange, multilinha, linhas = 9 }: { rotulo: string; valor: string; max: number; onChange: (v: string) => void; multilinha?: boolean; linhas?: number }) {
   return (
     <label style={{ display: "grid", gap: 6 }}>
       <span style={{ display: "flex", justifyContent: "space-between", fontSize: 14 }}>
         {rotulo} <Contador valor={valor} max={max} />
       </span>
       {multilinha ? (
-        <textarea value={valor} onChange={(e) => onChange(e.target.value)} rows={9} style={{ ...s.campo, resize: "vertical" }} />
+        <textarea value={valor} onChange={(e) => onChange(e.target.value)} rows={linhas} style={{ ...s.campo, resize: "vertical" }} />
       ) : (
         <input value={valor} onChange={(e) => onChange(e.target.value)} style={s.campo} />
       )}

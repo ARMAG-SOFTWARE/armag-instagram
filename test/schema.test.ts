@@ -57,3 +57,23 @@ describe("roteiro do Reel", () => {
     expect(validarRoteiro("")).toMatch(/roteiro/);
   });
 });
+
+describe("slides do carrossel", async () => {
+  const { validarSlides } = await import("@/lib/criativos/schema");
+  const s = (n: number, o: Partial<{ titulo: string; texto: string }> = {}) =>
+    Array.from({ length: n }, (_, i) => ({ titulo: `Ponto ${i + 1}`, texto: "Explicação curta do ponto.", ...o }));
+  it("aceita de 3 a 5 slides de conteúdo", () => {
+    expect(validarSlides(s(3))).toBeNull();
+    expect(validarSlides(s(5))).toBeNull();
+  });
+  it("recusa menos de 3 ou mais de 5", () => {
+    expect(validarSlides(s(2))).toMatch(/slides/);
+    expect(validarSlides(s(6))).toMatch(/slides/);
+    expect(validarSlides(null)).toMatch(/slides/);
+  });
+  it("título até 45 e texto até 160 caracteres", () => {
+    expect(validarSlides(s(3, { titulo: "x".repeat(46) }))).toMatch(/título/);
+    expect(validarSlides(s(3, { texto: "x".repeat(161) }))).toMatch(/texto/);
+    expect(validarSlides(s(3, { titulo: "" }))).toMatch(/título/);
+  });
+});

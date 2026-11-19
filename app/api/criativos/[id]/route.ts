@@ -2,8 +2,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { apresentar, atualizar, buscar } from "@/lib/criativos/dados";
 import { dispararRender } from "@/lib/criativos/github";
-import { gerarJpeg, subirImagem } from "@/lib/criativos/imagem";
-import { validarRoteiro, validarTexto } from "@/lib/criativos/schema";
+import { gerarCarrossel, gerarJpeg, subirImagem, subirSlides } from "@/lib/criativos/imagem";
+import { normalizarSlides, validarRoteiro, validarSlides, validarTexto, type Slide } from "@/lib/criativos/schema";
 import { autorizado, falha, naoAutorizado } from "@/lib/criativos/servidor";
 
 export const runtime = "nodejs";
@@ -34,6 +34,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         return NextResponse.json({ ok: false, erro: comErro.erro, criativo: apresentar(comErro) }, { status: 502 });
       }
       return NextResponse.json({ ok: true, criativo: apresentar(salvo) });
+    }
+
+    if (atual.formato === "carrossel") {
+      const slides = Array.isArray(corpo.slides) ? (corpo.slides as Slide[]) : atual.slides;
+      const erroSlides = validarSlides(slides);
+      if (erroSlides) return NextResponse.json({ erro: erroSlides }, { status: 400 });
+      const salvo = await atualizar(id, { ...v.texto, titulo_px: tituloPx, slides: normalizarSlides(slides) });
+      const urls = await subirSlides(id, await gerarCarrossel(salvo));
+      return NextResponse.json({ ok: true, criativo: apresentar(await atualizar(id, { imagens: urls, image_url: urls[0] })) });
     }
 
     const salvo = await atualizar(id, { ...v.texto, titulo_px: tituloPx });

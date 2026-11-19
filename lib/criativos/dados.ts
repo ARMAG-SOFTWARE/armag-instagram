@@ -1,7 +1,7 @@
 // Acesso às tabelas public.criativos e public.horarios_postagem (somente servidor, service role).
 import { supabaseAdmin } from "./servidor";
 import { formatarAgendado, type Formato, type Horario } from "./agenda";
-import type { Tipo } from "./schema";
+import type { Slide, Tipo } from "./schema";
 
 export type Status = "rascunho" | "renderizando" | "agendado" | "processando" | "publicando" | "publicado" | "erro" | "cancelado";
 
@@ -29,6 +29,8 @@ export type Criativo = {
   video_url: string | null;
   container_id: string | null;
   processando_desde: string | null;
+  slides: Slide[];
+  imagens: string[];
 };
 
 const db = () => supabaseAdmin();
@@ -49,7 +51,7 @@ export async function listar(status?: Status[], limite = 50): Promise<Criativo[]
   return ok(await q, "listar") as Criativo[];
 }
 
-type NovoCriativo = Pick<Criativo, "tipo" | "titulo" | "titulo_px" | "subtitulo" | "itens" | "cta" | "legenda" | "tema" | "formato" | "roteiro">;
+type NovoCriativo = Pick<Criativo, "tipo" | "titulo" | "titulo_px" | "subtitulo" | "itens" | "cta" | "legenda" | "tema" | "formato" | "roteiro" | "slides">;
 
 export async function inserir(c: NovoCriativo, status: Status = "rascunho") {
   return ok(await db().from("criativos").insert({ ...c, status }).select("*").single(), "inserir") as Criativo;

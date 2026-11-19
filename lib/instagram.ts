@@ -100,3 +100,26 @@ export async function publicarContainer(containerId: string) {
   const { permalink } = await graphGet<{ permalink?: string }>(mediaId, { fields: "permalink" });
   return { mediaId, permalink };
 }
+
+/* ---------- Carrossel (2 a 10 imagens) ---------- */
+
+/** Publica um carrossel: um contêiner por imagem, o contêiner CAROUSEL e a publicação. Imagens processam em segundos. */
+export async function publicarCarrossel(imageUrls: string[], legenda = "") {
+  if (imageUrls.length < 2 || imageUrls.length > 10) throw new Error("O carrossel precisa de 2 a 10 imagens");
+  const igUserId = env("IG_USER_ID");
+  const filhos: string[] = [];
+  for (const url of imageUrls) {
+    const { id } = await graphPost<{ id: string }>(`${igUserId}/media`, { image_url: url, is_carousel_item: "true" });
+    filhos.push(id);
+  }
+  for (const id of filhos) await aguardarContainer(id);
+  const { id: containerId } = await graphPost<{ id: string }>(`${igUserId}/media`, {
+    media_type: "CAROUSEL",
+    children: filhos.join(","),
+    caption: legenda,
+  });
+  await aguardarContainer(containerId);
+  const { id: mediaId } = await graphPost<{ id: string }>(`${igUserId}/media_publish`, { creation_id: containerId });
+  const { permalink } = await graphGet<{ permalink?: string }>(mediaId, { fields: "permalink" });
+  return { containerId, mediaId, permalink };
+}

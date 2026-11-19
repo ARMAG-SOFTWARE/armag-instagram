@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { formatarAgendado } from "./agenda";
-import { TIPOS, validarRoteiro, validarTexto, type TextoCriativo, type Tipo } from "./schema";
+import { normalizarSlides, TIPOS, validarRoteiro, validarSlides, validarTexto, type Slide, type TextoCriativo, type Tipo } from "./schema";
 import type { Formato } from "./agenda";
 
 const MODELO = "claude-sonnet-5-5";
@@ -21,6 +21,7 @@ const Formato = z.object({
   legenda: z.string(),
   tema: z.string(),
   roteiro: z.string(),
+  slides: z.array(z.object({ titulo: z.string(), texto: z.string() })),
 });
 
 let padrao: Promise<string> | null = null;
@@ -46,10 +47,14 @@ Responda somente com o JSON pedido:
   (Serviço: "Chama no direct ou toca no link da bio."; Dica: "Salva esse vídeo e segue a ARMAG.").
   Frases curtas, linguagem falada, números por extenso, sem hashtags, sem emojis e sem siglas difíceis de ler em voz alta.
 
+- slides: SÓ quando o formato for "carrossel" (senão devolva []). De 3 a 5 slides de conteúdo, um ponto por slide:
+  titulo até 45 caracteres e texto até 160 caracteres (1 ou 2 frases curtas). O título e o subtítulo viram a capa
+  e o CTA vira o último slide, então NÃO repita a capa nem o CTA dentro de slides. Os itens podem ficar vazios no carrossel.
+
 Nunca invente números, porcentagens, clientes, depoimentos, prêmios, prazos ou preços.
 Português do Brasil, com acentos corretos.`;
 
-export type TextoGerado = TextoCriativo & { roteiro: string | null };
+export type TextoGerado = TextoCriativo & { roteiro: string | null; slides: Slide[] };
 
 export async function gerarTexto(opts: { tipo: Tipo; formato?: Formato; temasRecentes: string[]; agora?: Date; client?: Anthropic }): Promise<TextoGerado> {
   const formato = opts.formato ?? "imagem";
@@ -57,7 +62,13 @@ export async function gerarTexto(opts: { tipo: Tipo; formato?: Formato; temasRec
   const system = `${await lerPadrao()}\n\n---\n${REGRAS}`;
   const pedido = [
     `Tipo de hoje: ${opts.tipo}.`,
-    `Formato: ${formato === "reel" ? "reel (vídeo vertical narrado; escreva também o roteiro)" : "imagem (roteiro vazio)"}.`,
+    `Formato: ${
+      formato === "reel"
+        ? "reel (vídeo vertical narrado; escreva também o roteiro; slides vazio)"
+        : formato === "carrossel"
+          ? "carrossel (escreva de 3 a 5 slides de conteúdo; roteiro vazio)"
+          : "imagem (roteiro vazio e slides vazio)"
+    }.`,
     `Hoje é ${formatarAgendado(opts.agora ?? new Date()).split(" às ")[0]}.`,
     opts.temasRecentes.length
       ? `Temas já usados (NÃO repita nenhum deles nem algo muito parecido):\n${opts.temasRecentes.map((t) => `- ${t}`).join("\n")}`
@@ -80,8 +91,15 @@ export async function gerarTexto(opts: { tipo: Tipo; formato?: Formato; temasRec
     const dados = r.parsed_output;
     const v = validarTexto(dados ? { ...dados, tipo: opts.tipo } : null);
     const erroRoteiro = formato === "reel" ? validarRoteiro(dados?.roteiro) : null;
-    if (v.ok && !erroRoteiro) return { ...v.texto, roteiro: formato === "reel" ? dados!.roteiro.trim() : null };
-    ultimoErro = [...(v.ok ? [] : v.erros), ...(erroRoteiro ? [erroRoteiro] : [])].join("; ");
+    const erroSlides = formato === "carrossel" ? validarSlides(dados?.slides) : null;
+    if (v.ok && !erroRoteiro && !erroSlides) {
+      return {
+        ...v.texto,
+        roteiro: formato === "reel" ? dados!.roteiro.trim() : null,
+        slides: formato === "carrossel" ? normalizarSlides(dados!.slides) : [],
+      };
+    }
+    ultimoErro = [...(v.ok ? [] : v.erros), ...(erroRoteiro ? [erroRoteiro] : []), ...(erroSlides ? [erroSlides] : [])].join("; ");
     // pede a correção mantendo a conversa (sem editar o histórico)
     mensagens.push({ role: "assistant", content: r.content });
     mensagens.push({ role: "user", content: `O JSON não passou na validação: ${ultimoErro}. Corrija e responda de novo com o JSON completo.` });

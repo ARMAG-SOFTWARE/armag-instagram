@@ -48,3 +48,25 @@ export function validarRoteiro(texto: string | null | undefined): string | null 
   if (n < ROTEIRO_MIN || n > ROTEIRO_MAX) return `roteiro: use de ${ROTEIRO_MIN} a ${ROTEIRO_MAX} palavras (tem ${n})`;
   return null;
 }
+
+export type Slide = { titulo: string; texto: string };
+export const SLIDES_MIN = 3;
+export const SLIDES_MAX = 5;
+export const SLIDE_TITULO_MAX = 45;
+export const SLIDE_TEXTO_MAX = 160;
+
+/** Slides de conteúdo do carrossel (a capa usa título/subtítulo e o último slide usa o CTA). Devolve o erro ou null. */
+export function validarSlides(slides: unknown): string | null {
+  if (!Array.isArray(slides) || slides.length < SLIDES_MIN || slides.length > SLIDES_MAX) {
+    return `slides: use de ${SLIDES_MIN} a ${SLIDES_MAX} slides de conteúdo (tem ${Array.isArray(slides) ? slides.length : 0})`;
+  }
+  for (const [i, sl] of slides.entries()) {
+    const t = String((sl as Slide)?.titulo ?? "").trim();
+    const x = String((sl as Slide)?.texto ?? "").trim();
+    if (!t || tamanho(t) > SLIDE_TITULO_MAX) return `slides: título do slide ${i + 1} deve ter de 1 a ${SLIDE_TITULO_MAX} caracteres`;
+    if (tamanho(x) > SLIDE_TEXTO_MAX) return `slides: texto do slide ${i + 1} deve ter até ${SLIDE_TEXTO_MAX} caracteres`;
+  }
+  return null;
+}
+
+export const normalizarSlides = (slides: Slide[]): Slide[] => slides.map((s) => ({ titulo: s.titulo.trim(), texto: (s.texto ?? "").trim() }));

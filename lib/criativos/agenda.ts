@@ -2,7 +2,7 @@
 
 export const FUSO = "America/Sao_Paulo";
 
-export type Formato = "imagem" | "reel";
+export type Formato = "imagem" | "carrossel" | "reel";
 export type Horario = { dia_semana: number; hora: string; ativo: boolean; formato?: Formato };
 
 const partes = (d: Date) => {

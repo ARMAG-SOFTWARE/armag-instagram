@@ -180,3 +180,19 @@ O workflow `.github/workflows/reel.yml` precisa estar na `main` para poder ser d
 - `scripts/reel/audio.py` — música e efeitos sintetizados + mixagem (voz por cima, −14 LUFS).
 - `scripts/reel/composicao.html` — a animação 1080×1920, desenhada quadro a quadro.
 - `lib/criativos/reel.ts` — publicação em duas etapas; `lib/criativos/github.ts` — dispara o workflow.
+
+---
+
+# Carrosséis
+
+Terceiro formato, ao lado de imagem e reel. Nos dias marcados como **Carrossel** (padrão: terça e quinta), o criativo do dia
+vira um carrossel **1080×1350 (4:5)** com 5 a 7 slides:
+**capa** (título e subtítulo) → **3 a 5 slides de conteúdo** (um ponto por slide) → **slide final** com o CTA.
+
+- O Claude escreve os slides seguindo o `PADRAO.md` (título ≤ 45 caracteres, texto ≤ 160).
+- As artes são geradas na própria Vercel (`lib/criativos/carrossel.tsx`, `next/og`); não usa GitHub Actions.
+- Na tela: prévia dos slides lado a lado, editor de slides (adicionar/remover, contadores) e "Gerar como carrossel".
+- Publicação: um contêiner por slide, o contêiner `CAROUSEL` e a publicação (`publicarCarrossel` em `lib/instagram.ts`),
+  com a mesma trava contra post duplicado e as mesmas novas tentativas.
+
+Configuração: rode `supabase/migrations/0004_carrossel.sql` (depois do `0003_reels.sql`).
