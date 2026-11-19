@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validarTexto } from "@/lib/criativos/schema";
+import { contarPalavras, validarRoteiro, validarTexto } from "@/lib/criativos/schema";
 import { tamanhoTitulo } from "@/lib/criativos/titulo";
 
 const ok = {
@@ -42,4 +42,38 @@ describe("tamanhoTitulo", () => {
   it("título curto fica em 76px", () => expect(tamanhoTitulo("Seu negócio no controle")).toBe(76));
   it("título longo diminui", () => expect(tamanhoTitulo("Controle financeiro simples para pequenos negócios")).toBeLessThan(76));
   it("nunca abaixo de 44px", () => expect(tamanhoTitulo("x".repeat(200))).toBeGreaterThanOrEqual(44));
+});
+
+describe("roteiro do Reel", () => {
+  const palavras = (n: number) => Array.from({ length: n }, (_, i) => `palavra${i}`).join(" ");
+  it("conta palavras ignorando pontuação e espaços extras", () => expect(contarPalavras("  Olá,  tudo bem?  Chama no direct! ")).toBe(6));
+  it("aceita de 25 a 40 palavras", () => {
+    expect(validarRoteiro(palavras(25))).toBeNull();
+    expect(validarRoteiro(palavras(40))).toBeNull();
+  });
+  it("recusa menos de 25 ou mais de 40", () => {
+    expect(validarRoteiro(palavras(24))).toMatch(/roteiro/);
+    expect(validarRoteiro(palavras(41))).toMatch(/roteiro/);
+    expect(validarRoteiro("")).toMatch(/roteiro/);
+  });
+});
+
+describe("slides do carrossel", async () => {
+  const { validarSlides } = await import("@/lib/criativos/schema");
+  const s = (n: number, o: Partial<{ titulo: string; texto: string }> = {}) =>
+    Array.from({ length: n }, (_, i) => ({ titulo: `Ponto ${i + 1}`, texto: "Explicação curta do ponto.", ...o }));
+  it("aceita de 3 a 5 slides de conteúdo", () => {
+    expect(validarSlides(s(3))).toBeNull();
+    expect(validarSlides(s(5))).toBeNull();
+  });
+  it("recusa menos de 3 ou mais de 5", () => {
+    expect(validarSlides(s(2))).toMatch(/slides/);
+    expect(validarSlides(s(6))).toMatch(/slides/);
+    expect(validarSlides(null)).toMatch(/slides/);
+  });
+  it("título até 45 e texto até 160 caracteres", () => {
+    expect(validarSlides(s(3, { titulo: "x".repeat(46) }))).toMatch(/título/);
+    expect(validarSlides(s(3, { texto: "x".repeat(161) }))).toMatch(/texto/);
+    expect(validarSlides(s(3, { titulo: "" }))).toMatch(/título/);
+  });
 });

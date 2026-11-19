@@ -75,3 +75,51 @@ export async function publicarImagem(imageUrl: string, legenda = "") {
 
   return { containerId, mediaId, permalink };
 }
+
+/* ---------- Reels (publicação em duas etapas, sem esperar dentro da função) ---------- */
+
+/** Etapa 1: cria o container do Reel. O Instagram baixa e processa o vídeo depois (pode levar minutos). */
+export async function criarContainerReel(videoUrl: string, legenda: string, capaUrl?: string | null): Promise<string> {
+  const igUserId = env("IG_USER_ID");
+  const params: Record<string, string> = { media_type: "REELS", video_url: videoUrl, caption: legenda, share_to_feed: "true" };
+  if (capaUrl) params.cover_url = capaUrl;
+  const { id } = await graphPost<{ id: string }>(`${igUserId}/media`, params);
+  return id;
+}
+
+/** FINISHED, IN_PROGRESS, ERROR, EXPIRED ou PUBLISHED. */
+export async function statusContainer(containerId: string): Promise<string> {
+  const { status_code } = await graphGet<{ status_code: string }>(containerId, { fields: "status_code" });
+  return status_code;
+}
+
+/** Etapa 2: publica um container já processado. */
+export async function publicarContainer(containerId: string) {
+  const igUserId = env("IG_USER_ID");
+  const { id: mediaId } = await graphPost<{ id: string }>(`${igUserId}/media_publish`, { creation_id: containerId });
+  const { permalink } = await graphGet<{ permalink?: string }>(mediaId, { fields: "permalink" });
+  return { mediaId, permalink };
+}
+
+/* ---------- Carrossel (2 a 10 imagens) ---------- */
+
+/** Publica um carrossel: um contêiner por imagem, o contêiner CAROUSEL e a publicação. Imagens processam em segundos. */
+export async function publicarCarrossel(imageUrls: string[], legenda = "") {
+  if (imageUrls.length < 2 || imageUrls.length > 10) throw new Error("O carrossel precisa de 2 a 10 imagens");
+  const igUserId = env("IG_USER_ID");
+  const filhos: string[] = [];
+  for (const url of imageUrls) {
+    const { id } = await graphPost<{ id: string }>(`${igUserId}/media`, { image_url: url, is_carousel_item: "true" });
+    filhos.push(id);
+  }
+  for (const id of filhos) await aguardarContainer(id);
+  const { id: containerId } = await graphPost<{ id: string }>(`${igUserId}/media`, {
+    media_type: "CAROUSEL",
+    children: filhos.join(","),
+    caption: legenda,
+  });
+  await aguardarContainer(containerId);
+  const { id: mediaId } = await graphPost<{ id: string }>(`${igUserId}/media_publish`, { creation_id: containerId });
+  const { permalink } = await graphGet<{ permalink?: string }>(mediaId, { fields: "permalink" });
+  return { containerId, mediaId, permalink };
+}

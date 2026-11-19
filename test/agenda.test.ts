@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcularAgendamento, diaSP, formatarAgendado, paraUtcSP, type Horario } from "@/lib/criativos/agenda";
+import { calcularAgendamento, diaSP, formatarAgendado, paraUtcSP, proximoFormato, type Horario } from "@/lib/criativos/agenda";
 
 // 0=domingo ... 6=sábado (valores iniciais da migration)
 const PADRAO: Horario[] = [
@@ -54,5 +54,45 @@ describe("formatarAgendado", () => {
   it("texto em português no fuso de SP", () => {
     expect(formatarAgendado(new Date("2026-11-18T15:00:00Z"))).toBe("quarta, 18/11 às 12:00");
     expect(formatarAgendado(new Date("2026-11-21T13:00:00Z"))).toBe("sábado, 21/11 às 10:00");
+  });
+});
+
+describe("formato por dia (Reels)", () => {
+  // quarta (3) e sexta (5) são reel
+  const H: Horario[] = PADRAO.map((h) => ({ ...h, formato: h.dia_semana === 3 || h.dia_semana === 5 ? "reel" : "imagem" }));
+  it("reel só cai em dia de reel: quarta 09:00 → hoje", () => {
+    expect(iso(calcularAgendamento(new Date("2026-11-18T12:00:00Z"), H, new Set(), "reel"))).toBe("2026-11-18T15:00:00.000Z");
+  });
+  it("imagem na quarta vai para quinta", () => {
+    expect(iso(calcularAgendamento(new Date("2026-11-18T12:00:00Z"), H, new Set(), "imagem"))).toBe("2026-11-19T15:00:00.000Z");
+  });
+  it("reel depois do horário de quarta → sexta", () => {
+    expect(iso(calcularAgendamento(new Date("2026-11-18T16:00:00Z"), H, new Set(), "reel"))).toBe("2026-11-20T15:00:00.000Z");
+  });
+  it("nenhum dia de reel → null", () => {
+    expect(calcularAgendamento(new Date("2026-11-18T12:00:00Z"), H.map((h) => ({ ...h, formato: "imagem" as const })), new Set(), "reel")).toBeNull();
+  });
+  it("sem formato informado aceita qualquer dia (compatível)", () => {
+    expect(iso(calcularAgendamento(new Date("2026-11-18T16:00:00Z"), H, new Set()))).toBe("2026-11-19T15:00:00.000Z");
+  });
+  it("horário sem formato conta como imagem", () => {
+    expect(iso(calcularAgendamento(new Date("2026-11-18T12:00:00Z"), PADRAO, new Set(), "imagem"))).toBe("2026-11-18T15:00:00.000Z");
+  });
+  it("proximoFormato: formato do próximo dia ativo e livre", () => {
+    expect(proximoFormato(new Date("2026-11-18T12:00:00Z"), H, new Set())).toBe("reel");
+    expect(proximoFormato(new Date("2026-11-18T16:00:00Z"), H, new Set())).toBe("imagem");
+    expect(proximoFormato(new Date("2026-11-18T12:00:00Z"), H, new Set(["2026-11-18"]))).toBe("imagem");
+  });
+});
+
+describe("três formatos", () => {
+  // seg imagem · ter carrossel · qua reel · qui carrossel · sex reel · sáb imagem
+  const F = ["imagem", "imagem", "carrossel", "reel", "carrossel", "reel", "imagem"] as const;
+  const H: Horario[] = PADRAO.map((h) => ({ ...h, formato: F[h.dia_semana] }));
+  it("carrossel na quarta 13h → quinta", () => {
+    expect(iso(calcularAgendamento(new Date("2026-11-18T16:00:00Z"), H, new Set(), "carrossel"))).toBe("2026-11-19T15:00:00.000Z");
+  });
+  it("proximoFormato reconhece carrossel", () => {
+    expect(proximoFormato(new Date("2026-11-18T16:00:00Z"), H, new Set())).toBe("carrossel");
   });
 });

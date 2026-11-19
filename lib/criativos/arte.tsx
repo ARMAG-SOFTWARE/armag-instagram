@@ -24,7 +24,7 @@ const TEXTO_2 = "#b9ad93";
 
 let cache: Promise<{ fontes: { name: string; data: ArrayBuffer; weight: 400 | 500 | 700 | 800; style: "normal" }[]; brasao: string }> | null = null;
 
-function recursos() {
+export function recursos() {
   cache ??= (async () => {
     const fonte = async (arquivo: string) => {
       const b = await readFile(path.join(MARCA, "fonts", arquivo));
@@ -52,7 +52,7 @@ function recursos() {
   return cache;
 }
 
-const textoOuro = (gradiente: string) => ({
+export const textoOuro = (gradiente: string) => ({
   backgroundImage: gradiente,
   backgroundClip: "text" as const,
   color: "transparent",

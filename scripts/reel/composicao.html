@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<title>Reel ARMAG</title>
+<style>
+@font-face { font-family: "Cinzel"; font-weight: 700; src: url(/criativos/marca/fonts/cinzel-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Cinzel"; font-weight: 800; src: url(/criativos/marca/fonts/cinzel-latin-800-normal.woff2) format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 400; src: url(/criativos/marca/fonts/inter-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 500; src: url(/criativos/marca/fonts/inter-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Inter"; font-weight: 700; src: url(/criativos/marca/fonts/inter-latin-700-normal.woff2) format("woff2"); }
+:root { --ouro: #d4a94f; --ouro-claro: #f3d58c; --ouro-escuro: #8a6424; --texto: #efe6d2; --texto-2: #b9ad93; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1080px; height: 1920px; overflow: hidden; background: #070707; }
+#palco { position: relative; width: 1080px; height: 1920px; overflow: hidden; color: var(--texto); font-family: Inter, sans-serif;
+  background: radial-gradient(1000px 800px at 85% 6%, rgba(212,169,79,.18), transparent 60%),
+              radial-gradient(900px 700px at 0% 100%, rgba(212,169,79,.11), transparent 60%), #070707; -webkit-font-smoothing: antialiased; }
+.camada { position: absolute; inset: 0; }
+.moldura { position: absolute; inset: 40px; border: 2px solid rgba(212,169,79,.35); border-radius: 40px; }
+.dagua { position: absolute; right: -120px; bottom: 120px; width: 720px; opacity: .09; }
+.ouro { background: linear-gradient(180deg, #fff2c9, var(--ouro) 60%, #a77a2c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.topo { position: absolute; left: 100px; right: 100px; top: 150px; display: flex; align-items: center; gap: 22px; }
+.topo img { width: 84px; }
+.marca { font-family: Cinzel; font-weight: 800; font-size: 50px; letter-spacing: 9px;
+  background: linear-gradient(180deg, var(--ouro-claro), var(--ouro) 55%, var(--ouro-escuro)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.selo { margin-left: auto; font-weight: 700; font-size: 28px; letter-spacing: 5px; text-transform: uppercase; color: #070707;
+  background: linear-gradient(180deg, var(--ouro-claro), var(--ouro)); padding: 14px 28px; border-radius: 999px; }
+.conteudo { position: absolute; left: 100px; right: 100px; top: 470px; }
+.titulo { font-family: Cinzel; font-weight: 700; line-height: 1.08; letter-spacing: .5px; }
+.titulo .w { display: inline-block; will-change: transform, opacity; }
+.linha { width: 160px; height: 4px; margin: 46px 0 40px; background: linear-gradient(90deg, var(--ouro), transparent); transform-origin: 0 50%; }
+.subtitulo { font-size: 50px; line-height: 1.38; font-weight: 500; }
+.itens { margin-top: 50px; display: grid; gap: 28px; }
+.item { font-size: 46px; display: flex; gap: 22px; align-items: center; }
+.item i { flex: 0 0 18px; height: 18px; transform: rotate(45deg); background: linear-gradient(135deg, var(--ouro-claro), var(--ouro)); }
+.final { position: absolute; left: 100px; right: 100px; top: 420px; text-align: center; display: flex; flex-direction: column; align-items: center; }
+.final img { width: 330px; }
+.final .marca { margin-top: 26px; font-size: 76px; letter-spacing: 14px; }
+.final .cta { margin-top: 70px; font-weight: 700; font-size: 54px; line-height: 1.25; color: var(--ouro-claro); max-width: 860px; }
+.final .arroba { margin-top: 48px; font-size: 44px; color: var(--texto); letter-spacing: 2px; }
+.final .bio { margin-top: 30px; font-weight: 700; font-size: 32px; letter-spacing: 4px; text-transform: uppercase; color: #070707;
+  background: linear-gradient(180deg, var(--ouro-claro), var(--ouro)); padding: 18px 36px; border-radius: 999px; }
+.flash { background: #fff; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="palco">
+  <div class="moldura"></div>
+  <img class="dagua" src="/criativos/marca/brasao-transparente.png" alt="" />
+  <div class="camada" id="cena">
+    <div class="topo" id="topo"><img src="/criativos/marca/brasao-transparente.png" alt="" /><div class="marca">ARMAG</div><div class="selo" id="selo"></div></div>
+    <div class="conteudo" id="conteudo">
+      <div class="titulo" id="titulo"></div>
+      <div class="linha" id="linha"></div>
+      <div class="subtitulo" id="subtitulo"></div>
+      <div class="itens" id="itens"></div>
+    </div>
+  </div>
+  <div class="final" id="final">
+    <img src="/criativos/marca/brasao-transparente.png" alt="" />
+    <div class="marca">ARMAG</div>
+    <div class="cta" id="cta"></div>
+    <div class="arroba">@armag.soft</div>
+    <div class="bio">link na bio</div>
+  </div>
+  <div class="camada flash" id="flash"></div>
+</div>
+<script>
+/* Tudo é função do tempo: window.renderFrame(t) desenha o quadro exato (determinístico).
+   window.DADOS = { tipo, titulo, titulo_px, subtitulo, itens, cta, duracao, cenas: { titulo, subtitulo, itens: [t...], final } } */
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const prog = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, k) => a + (b - a) * k;
+const out = (k) => 1 - Math.pow(1 - k, 3);
+const back = (k) => { const c1 = 1.6, c3 = c1 + 1; return 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2); };
+const inOut = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+const D = window.DADOS;
+let palavras = [], itens = [];
+
+function montar() {
+  $("selo").textContent = D.tipo;
+  const t = $("titulo");
+  t.style.fontSize = D.titulo_px + "px";
+  t.innerHTML = D.titulo.split(" ").map((w) => `<span class="w ouro">${w.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</span>`).join(" ");
+  palavras = [...t.querySelectorAll(".w")];
+  $("subtitulo").textContent = D.subtitulo;
+  $("itens").innerHTML = D.itens.map((i) => `<div class="item"><i></i><span></span></div>`).join("");
+  itens = [...$("itens").children];
+  itens.forEach((el, i) => (el.querySelector("span").textContent = D.itens[i]));
+  $("cta").textContent = D.cta;
+  // evita repetir "@armag.soft" quando o CTA já cita o perfil
+  if (/@armag\.soft/i.test(D.cta)) document.querySelector(".final .arroba").style.display = "none";
+}
+
+function aparece(el, t, t0, dy = 40, dur = 0.45) {
+  const k = out(prog(t, t0, t0 + dur));
+  el.style.opacity = prog(t, t0, t0 + dur * 0.6).toFixed(3);
+  el.style.transform = `translateY(${((1 - k) * dy).toFixed(1)}px)`;
+}
+
+window.renderFrame = (t) => {
+  const C = D.cenas;
+  // leve aproximação contínua (dá vida ao quadro)
+  $("palco").style.transform = `scale(${lerp(1, 1.03, prog(t, 0, D.duracao)).toFixed(4)})`;
+  // topo
+  aparece($("topo"), t, 0.05, -30, 0.5);
+  // título palavra por palavra
+  palavras.forEach((w, i) => {
+    const s = C.titulo + i * 0.09;
+    const k = back(prog(t, s, s + 0.42));
+    w.style.opacity = prog(t, s, s + 0.2).toFixed(3);
+    w.style.transform = `translateY(${((1 - k) * 60).toFixed(1)}px) scale(${lerp(0.85, 1, k).toFixed(3)})`;
+  });
+  const fimTitulo = C.titulo + palavras.length * 0.09 + 0.2;
+  $("linha").style.transform = `scaleX(${out(prog(t, fimTitulo, fimTitulo + 0.5)).toFixed(3)})`;
+  aparece($("subtitulo"), t, C.subtitulo, 50);
+  itens.forEach((el, i) => {
+    const s = C.itens[i];
+    const k = back(prog(t, s, s + 0.4));
+    el.style.opacity = prog(t, s, s + 0.2).toFixed(3);
+    el.style.transform = `translateX(${((1 - k) * -80).toFixed(1)}px)`;
+  });
+  // troca para o cartão final
+  const kf = inOut(prog(t, C.final - 0.25, C.final + 0.25));
+  $("cena").style.opacity = (1 - kf).toFixed(3);
+  $("cena").style.transform = `translateY(${(-kf * 120).toFixed(1)}px)`;
+  const fin = $("final");
+  fin.style.display = t >= C.final - 0.3 ? "" : "none";
+  const k2 = back(prog(t, C.final, C.final + 0.6));
+  fin.style.opacity = prog(t, C.final - 0.05, C.final + 0.3).toFixed(3);
+  fin.style.transform = `scale(${lerp(0.82, 1, k2).toFixed(3)})`;
+  // flash suave na entrada do cartão final
+  const fl = t >= C.final - 0.04 && t < C.final + 0.4 ? 0.15 * (1 - (t - C.final + 0.04) / 0.44) : 0;
+  $("flash").style.opacity = clamp(fl).toFixed(3);
+};
+
+window.ready = (async () => {
+  montar();
+  await document.fonts.ready;
+  await Promise.all([...document.images].map((i) => (i.complete ? 0 : i.decode().catch(() => {}))));
+  return true;
+})();
+</script>
+</body>
+</html>
